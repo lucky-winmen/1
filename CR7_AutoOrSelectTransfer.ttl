@@ -1,0 +1,185 @@
+getdir DIR
+
+;=================================================== 
+;; COM port / baudrate setting
+COM_PORT = '4' 
+BAUDRATE = '115200' 
+;=================================================== 
+COMMAND = '/C=' 
+strconcat COMMAND COM_PORT 
+strconcat COMMAND ' /BAUD=' 
+strconcat COMMAND BAUDRATE
+ 
+;connect COMMAND
+
+setbaud 115200
+
+;---------------------------------------------------
+; Initialize DRAM
+;---------------------------------------------------
+;wait '>'
+;mpause 100
+;sendln 'init_dram'
+
+;---------------------------------------------------
+; Setting load image parameter
+;---------------------------------------------------
+ARRAY_NUM = 8
+strdim IMGNM ARRAY_NUM
+IMGNM[0] = 'bootparam_sa0.srec'
+IMGNM[1] = 'cr7_loader.srec'
+IMGNM[2] = 'cert_header_sa3.srec'
+IMGNM[3] = 'dummy_rtos.srec'
+IMGNM[4] = 'bl2.srec'
+IMGNM[5] = 'cert_header_sa6.srec'
+IMGNM[6] = 'bl31.srec'
+IMGNM[7] = 'Bl33.srec'
+
+strdim IMGADR ARRAY_NUM
+IMGADR[0] = 'E6320000'
+IMGADR[1] = 'E6302000'
+IMGADR[2] = 'E6320000'
+IMGADR[3] = '480A0800'
+IMGADR[4] = '40008000'
+IMGADR[5] = 'E6320000'
+IMGADR[6] = '50280000'
+IMGADR[7] = '58280000'
+
+strdim FLASHADR ARRAY_NUM
+FLASHADR[0] = '00000000'
+FLASHADR[1] = '00040000'
+FLASHADR[2] = '000C0000'
+FLASHADR[3] = '00740000'
+FLASHADR[4] = '00140000'
+FLASHADR[5] = '00180000'
+FLASHADR[6] = '001C0000'
+FLASHADR[7] = '00600000'
+
+;--------------------------------------------------------------------------
+; switch Scif speed UP (Change to 460.8kbps or 921.6kbps baud rate setting)
+;--------------------------------------------------------------------------
+wait '>'
+mpause 100
+
+;sendln 'sup'
+;wait 'Change to 460.8Kbps baud rate setting of the SCIF. OK? (y/n)' 'Please change to 921.6Kbps baud rate setting of the terminal.' 'Please change to 460.8Kbps baud rate setting of the terminal.'
+;
+;If result=1 then
+;  sendln 'y'
+;  wait 'Please change to 460.8Kbps baud rate setting of the terminal.'
+;  setbaud 460800
+;elseif result=2 then
+;  ; result=2
+;  setbaud 921600
+;else
+;  ; result=3
+;  setbaud 460800
+;endif
+
+
+
+;---------------------------------------------------
+; Select load all images or selected image
+;---------------------------------------------------
+;wait '>'
+;mpause 100
+
+yesnobox 'Do you write all of the images?' 'All images write'
+Str_Yesno = result
+
+if Str_Yesno=1 then
+  call Load_all_image
+else	
+  call Load_selected_image
+endif
+
+setbaud 115200
+
+end
+
+;---------------------------------------------------
+; load all images
+;---------------------------------------------------
+:Load_All_image
+
+; file check
+for i 0 ARRAY_NUM-1
+    filesearch IMGNM[i]
+    if result=0 then
+        sprintf 'File "%s" not found' IMGNM[i]
+        messagebox inputstr 'error'
+        break
+    endif
+next
+
+if result=1 then
+    for i 0 ARRAY_NUM-1
+        index = i
+        call Load_Image
+    next
+else
+    messagebox "Cancel write all images" "error"
+endif
+
+;messagebox "All images write completion" ""
+return
+
+;---------------------------------------------------
+; Select load selected Image
+;---------------------------------------------------
+:Load_selected_image
+:retry
+    listbox 'Please select the image to be written.' 'image select' IMGNM
+    index = result
+    if index = -1 then
+;        messagebox "Write completion" ""
+    else
+        ; file check
+        filesearch IMGNM[index]
+        If result=0 then
+            sprintf 'File "%s" not found' IMGNM[index]
+            messagebox inputstr 'error'
+        else
+            call Load_Image
+        endif
+        goto retry
+    endif
+return
+
+;---------------------------------------------------
+; Load Image
+;---------------------------------------------------
+:Load_Image
+sendln 'xls2'
+wait '  Select (1-3)>'
+sendln '3'
+wait 'SW5 1pin-Side! Setting OK? (Push Y key)'
+sendln 'y'
+wait 'SW7 All OFF!   Setting OK? (Push Y key)'
+sendln 'y'
+wait '  Please Input : H'
+mpause 1
+sendln IMGADR[index]
+wait '  Please Input : H'
+sendln FLASHADR[index]
+wait 'CR stop load)'
+mpause 400
+FILE_NAME = DIR
+strconcat FILE_NAME '\'
+strconcat FILE_NAME IMGNM[index]
+sendfile FILE_NAME 1
+wait 'complete!' 'Clear OK?(y/n)'
+If result=1 goto proc_end
+If result=2 goto send_y
+
+:send_y
+sendln 'y'
+wait '>'
+
+:proc_end
+mpause 100
+return
+
+;setbaud 115200
+
+
